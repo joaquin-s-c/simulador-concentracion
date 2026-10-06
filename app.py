@@ -89,8 +89,9 @@ if codigo_indicador == "crk":
         min_value=1, max_value=n_empresas, value=min(3, n_empresas), step=1,
     ))
 
+max_texto = f"{MAX_ITERACIONES:,}".replace(",", ".")
 n_iteraciones = int(st.sidebar.number_input(
-    f"Número de iteraciones (máx. {MAX_ITERACIONES:,})".replace(",", "."),
+    f"Número de iteraciones (máx. {max_texto})",
     min_value=1, max_value=MAX_ITERACIONES, value=ITERACIONES_DEFECTO, step=1000,
 ))
 
@@ -98,8 +99,7 @@ st.warning(
     "⚠️ **Consumo de recursos:** cada iteración genera un mercado y calcula "
     "el indicador. Al aumentar el número de iteraciones (y el de empresas) "
     "la simulación usa más memoria y procesador, y **demora más** en "
-    f"terminar. El máximo permitido es {MAX_ITERACIONES:,} iteraciones."
-    .replace(",", ".")
+    f"terminar. El máximo permitido es {max_texto} iteraciones."
 )
 
 # ---------------------------------------------------------------
@@ -184,7 +184,8 @@ if st.button("Simular", type="primary"):
     duracion = time.time() - inicio
 
     # 4) Percentil: % de mercados simulados con valor <= al del caso
-    percentil = float(np.mean(resultados <= valor_caso) * 100)
+    #    (se suma una tolerancia diminuta para evitar errores de decimales)
+    percentil = float(np.mean(resultados <= valor_caso + 1e-9) * 100)
 
     # 5) Guardar todo para mostrarlo en las siguientes ejecuciones
     st.session_state["resultado"] = {
@@ -241,8 +242,11 @@ else:
     c6.metric("Máximo simulado", f"{resultados.max():.4f}")
 
     # Histograma con la línea vertical del caso
+    # Si todos los valores son iguales (por ejemplo, CRk con k = N siempre
+    # vale 1), no se pueden crear 30 barras: se dibuja una sola.
+    hay_variacion = resultados.max() - resultados.min() > 1e-9
     fig, ax = plt.subplots()
-    ax.hist(resultados, bins=30, edgecolor="black")
+    ax.hist(resultados, bins=30 if hay_variacion else 1, edgecolor="black")
     ax.axvline(valor_caso, color="red", linestyle="--", linewidth=2,
                label=f"Caso particular ({valor_caso:.4f})")
     ax.set_xlabel(f"Valor del indicador: {nombre}")
@@ -253,6 +257,10 @@ else:
     )
     ax.legend()
     st.pyplot(fig)
+    if not hay_variacion:
+        st.caption("Con estos parámetros el indicador vale lo mismo en todas "
+                   "las simulaciones (por ejemplo, CRk con k = N siempre da "
+                   "1), por eso el histograma tiene una sola barra.")
 
     with st.expander("Ver las cuotas del caso particular (%)"):
         st.dataframe(pd.DataFrame(
